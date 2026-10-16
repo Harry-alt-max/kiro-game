@@ -9,11 +9,11 @@ const constants = {
     return lane * 160 + 80;
   },
   BASE_SPEED: 200,
-  SPEED_INCREMENT: 20,
-  SPEED_STEP_INTERVAL: 8,
-  MAX_SPEED: 600,
+  SCORE_SPEED_INCREMENT: 20,   // speed added per level-up
+  SCORE_PER_LEVEL: 100,        // score needed per level
+  MAX_SPEED: 800,              // raised ceiling for score-based scaling
   SPAWN_INTERVAL_INIT: 1800,
-  SPAWN_INTERVAL_MIN: 600,
+  SPAWN_INTERVAL_MIN: 500,
   COIN_SPAWN_INTERVAL_INIT: 1200,
   PLAYER_WIDTH: 60,
   PLAYER_HEIGHT: 80,
@@ -34,11 +34,32 @@ const bestScore = {
     const current = this.get();
     if (score > current) {
       localStorage.setItem(constants.BEST_SCORE_KEY, String(score));
-      return true; // new record
+      return true;
     }
     return false;
   },
 };
+
+// --- Level helpers -----------------------------------------------------------
+function levelFromScore(score) {
+  return Math.floor(score / constants.SCORE_PER_LEVEL) + 1;
+}
+
+function speedFromScore(score) {
+  const level = levelFromScore(score);
+  return Math.min(
+    constants.MAX_SPEED,
+    constants.BASE_SPEED + (level - 1) * constants.SCORE_SPEED_INCREMENT
+  );
+}
+
+function spawnIntervalFromScore(score) {
+  const level = levelFromScore(score);
+  return Math.max(
+    constants.SPAWN_INTERVAL_MIN,
+    constants.SPAWN_INTERVAL_INIT - (level - 1) * 100
+  );
+}
 
 // --- State -------------------------------------------------------------------
 let state = {};
@@ -49,10 +70,10 @@ function resetState() {
     speed: constants.BASE_SPEED,
     time: 0,
     score: 0,
+    lastLevel: 1,              // track level-ups for flash notice
+    levelUpFlash: 0,           // countdown ms for level-up flash
     obstacles: [],
     coins: [],
-    spawnInterval: constants.SPAWN_INTERVAL_INIT,
-    coinSpawnInterval: constants.COIN_SPAWN_INTERVAL_INIT,
     spawnTimer: 0,
     coinTimer: 0,
     player: {
@@ -154,19 +175,16 @@ const spawnManager = {
   },
 
   update(dt) {
-    state.spawnInterval = Math.max(
-      constants.SPAWN_INTERVAL_MIN,
-      1800 - Math.floor(state.time / 8) * 150
-    );
+    const spawnInterval = spawnIntervalFromScore(state.score);
 
     state.spawnTimer += dt;
-    if (state.spawnTimer >= state.spawnInterval) {
+    if (state.spawnTimer >= spawnInterval) {
       this.spawnObstacles();
       state.spawnTimer = 0;
     }
 
     state.coinTimer += dt;
-    if (state.coinTimer >= state.coinSpawnInterval) {
+    if (state.coinTimer >= constants.COIN_SPAWN_INTERVAL_INIT) {
       const lane = Math.floor(Math.random() * 3);
       state.coins.push({
         lane,
@@ -281,6 +299,25 @@ const renderer = {
       8
     );
     ctx.fill();
+
+    // Level-up flash overlay
+    if (state.levelUpFlash > 0) {
+      const alpha = state.levelUpFlash / 1200;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.35;
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, alpha * 1.5);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('LEVEL ' + levelFromScore(state.score) + '  ▲ 加速！', W / 2, H / 2);
+      ctx.restore();
+    }
   },
 };
 
@@ -299,7 +336,6 @@ const ui = {
 
     if (phase === 'idle') {
       startScreen.classList.remove('hidden');
-      // Show best score on start screen
       const startBest = document.getElementById('start-best');
       if (startBest) startBest.textContent = '歷史最高分：' + bestScore.get();
     } else if (phase === 'playing') {
@@ -307,15 +343,16 @@ const ui = {
       if (touchControls) touchControls.classList.remove('hidden');
       this.updateScore();
     } else if (phase === 'gameover') {
-      // Save and check best score before showing screen
       const isNewBest = bestScore.update(state.score);
 
       const finalScore   = document.getElementById('final-score');
       const newBestLabel = document.getElementById('new-best');
       const gameoverBest = document.getElementById('gameover-best');
+      const gameoverLevel = document.getElementById('gameover-level');
 
-      if (finalScore)   finalScore.textContent   = '最終分數：' + state.score;
-      if (gameoverBest) gameoverBest.textContent  = '歷史最高分：' + bestScore.get();
+      if (finalScore)    finalScore.textContent    = '最終分數：' + state.score;
+      if (gameoverBest)  gameoverBest.textContent  = '歷史最高分：' + bestScore.get();
+      if (gameoverLevel) gameoverLevel.textContent = '到達等級：Lv.' + levelFromScore(state.score);
 
       if (newBestLabel) {
         if (isNewBest) {
@@ -334,16 +371,27 @@ const ui = {
     if (scoreDisplay) scoreDisplay.textContent = '分數：' + state.score;
     const bestDisplay = document.getElementById('best-display');
     if (bestDisplay) bestDisplay.textContent = '最高：' + bestScore.get();
+    const levelDisplay = document.getElementById('level-display');
+    if (levelDisplay) levelDisplay.textContent = 'Lv.' + levelFromScore(state.score);
   },
 };
 
 // --- Main Update -------------------------------------------------------------
 function update(dt) {
   state.time += dt / 1000;
-  state.speed = Math.min(
-    constants.MAX_SPEED,
-    constants.BASE_SPEED + constants.SPEED_INCREMENT * Math.floor(state.time / constants.SPEED_STEP_INTERVAL)
-  );
+
+  // Score-based speed
+  state.speed = speedFromScore(state.score);
+
+  // Detect level-up
+  const currentLevel = levelFromScore(state.score);
+  if (currentLevel > state.lastLevel) {
+    state.lastLevel = currentLevel;
+    state.levelUpFlash = 1200; // flash for 1.2s
+  }
+  if (state.levelUpFlash > 0) {
+    state.levelUpFlash = Math.max(0, state.levelUpFlash - dt);
+  }
 
   Player.update(dt);
 
