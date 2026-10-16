@@ -21,6 +21,23 @@ const constants = {
   OBSTACLE_HEIGHT: 60,
   COIN_RADIUS: 18,
   HITBOX_INSET: 8,
+  BEST_SCORE_KEY: 'runnerBestScore',
+};
+
+// --- Best Score (localStorage) -----------------------------------------------
+const bestScore = {
+  get() {
+    const val = parseInt(localStorage.getItem(constants.BEST_SCORE_KEY), 10);
+    return isNaN(val) ? 0 : val;
+  },
+  update(score) {
+    const current = this.get();
+    if (score > current) {
+      localStorage.setItem(constants.BEST_SCORE_KEY, String(score));
+      return true; // new record
+    }
+    return false;
+  },
 };
 
 // --- State -------------------------------------------------------------------
@@ -282,12 +299,32 @@ const ui = {
 
     if (phase === 'idle') {
       startScreen.classList.remove('hidden');
+      // Show best score on start screen
+      const startBest = document.getElementById('start-best');
+      if (startBest) startBest.textContent = '歷史最高分：' + bestScore.get();
     } else if (phase === 'playing') {
       if (hud) hud.style.display = '';
       if (touchControls) touchControls.classList.remove('hidden');
+      this.updateScore();
     } else if (phase === 'gameover') {
-      const finalScore = document.getElementById('final-score');
-      if (finalScore) finalScore.textContent = '最終分數：' + state.score;
+      // Save and check best score before showing screen
+      const isNewBest = bestScore.update(state.score);
+
+      const finalScore   = document.getElementById('final-score');
+      const newBestLabel = document.getElementById('new-best');
+      const gameoverBest = document.getElementById('gameover-best');
+
+      if (finalScore)   finalScore.textContent   = '最終分數：' + state.score;
+      if (gameoverBest) gameoverBest.textContent  = '歷史最高分：' + bestScore.get();
+
+      if (newBestLabel) {
+        if (isNewBest) {
+          newBestLabel.classList.remove('hidden');
+        } else {
+          newBestLabel.classList.add('hidden');
+        }
+      }
+
       gameoverScreen.classList.remove('hidden');
     }
   },
@@ -295,6 +332,8 @@ const ui = {
   updateScore() {
     const scoreDisplay = document.getElementById('score-display');
     if (scoreDisplay) scoreDisplay.textContent = '分數：' + state.score;
+    const bestDisplay = document.getElementById('best-display');
+    if (bestDisplay) bestDisplay.textContent = '最高：' + bestScore.get();
   },
 };
 
@@ -352,7 +391,7 @@ document.addEventListener('keydown', (e) => {
 
 // --- Touch Swipe Input -------------------------------------------------------
 let touchStartX = null;
-const SWIPE_THRESHOLD = 30; // px
+const SWIPE_THRESHOLD = 30;
 
 canvas.addEventListener('touchstart', (e) => {
   if (state.phase !== 'playing') return;
@@ -397,14 +436,12 @@ document.getElementById('start-btn').addEventListener('click', () => {
   resetState();
   state.phase = 'playing';
   ui.show('playing');
-  ui.updateScore();
 });
 
 document.getElementById('restart-btn').addEventListener('click', () => {
   resetState();
   state.phase = 'playing';
   ui.show('playing');
-  ui.updateScore();
 });
 
 // --- Init --------------------------------------------------------------------
