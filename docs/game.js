@@ -1,6 +1,6 @@
 ﻿'use strict';
 
-// ─── Constants ──────────────────────────────────────────────────────────────
+// --- Constants ---------------------------------------------------------------
 const constants = {
   CANVAS_WIDTH: 480,
   CANVAS_HEIGHT: 640,
@@ -23,7 +23,7 @@ const constants = {
   HITBOX_INSET: 8,
 };
 
-// ─── State ───────────────────────────────────────────────────────────────────
+// --- State -------------------------------------------------------------------
 let state = {};
 
 function resetState() {
@@ -53,7 +53,7 @@ function resetState() {
 
 resetState();
 
-// ─── Canvas Setup ────────────────────────────────────────────────────────────
+// --- Canvas Setup ------------------------------------------------------------
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
 
@@ -72,7 +72,7 @@ if (!ctx) {
   throw new Error('Canvas 2D context not available');
 }
 
-// ─── Collision Utilities ─────────────────────────────────────────────────────
+// --- Collision Utilities -----------------------------------------------------
 function rectsOverlap(a, b) {
   return !(a.right < b.left || a.left > b.right ||
            a.bottom < b.top || a.top > b.bottom);
@@ -89,12 +89,12 @@ function getHitbox(obj, inset) {
   };
 }
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// --- Player ------------------------------------------------------------------
 const Player = {
   handleInput(key) {
-    if (key === 'ArrowLeft') {
+    if (key === 'ArrowLeft' || key === 'left') {
       state.player.lane = Math.max(0, state.player.lane - 1);
-    } else if (key === 'ArrowRight') {
+    } else if (key === 'ArrowRight' || key === 'right') {
       state.player.lane = Math.min(2, state.player.lane + 1);
     } else {
       return;
@@ -116,16 +116,14 @@ const Player = {
   },
 };
 
-// ─── Spawn Manager ───────────────────────────────────────────────────────────
+// --- Spawn Manager -----------------------------------------------------------
 const spawnManager = {
   spawnObstacles() {
-    // Fisher-Yates shuffle of [0, 1, 2]
     const lanes = [0, 1, 2];
     for (let i = lanes.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
     }
-    // 60% chance: 1 blocked lane, 40% chance: 2 blocked lanes
     const count = Math.random() < 0.6 ? 1 : 2;
     for (let i = 0; i < count; i++) {
       state.obstacles.push({
@@ -139,7 +137,6 @@ const spawnManager = {
   },
 
   update(dt) {
-    // Dynamically recalculate spawn interval
     state.spawnInterval = Math.max(
       constants.SPAWN_INTERVAL_MIN,
       1800 - Math.floor(state.time / 8) * 150
@@ -166,12 +163,11 @@ const spawnManager = {
   },
 };
 
-// ─── Collision ───────────────────────────────────────────────────────────────
+// --- Collision ---------------------------------------------------------------
 const collision = {
   check() {
     const playerHitbox = getHitbox(state.player, constants.HITBOX_INSET);
 
-    // Check obstacles
     for (const obs of state.obstacles) {
       const obsHitbox = getHitbox(obs, constants.HITBOX_INSET);
       if (rectsOverlap(playerHitbox, obsHitbox)) {
@@ -181,7 +177,6 @@ const collision = {
       }
     }
 
-    // Check coins
     for (const coin of state.coins) {
       if (coin.collected) continue;
       const coinObj = {
@@ -200,7 +195,7 @@ const collision = {
   },
 };
 
-// ─── Renderer ────────────────────────────────────────────────────────────────
+// --- Renderer ----------------------------------------------------------------
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -220,17 +215,14 @@ const renderer = {
     const W = constants.CANVAS_WIDTH;
     const H = constants.CANVAS_HEIGHT;
 
-    // Clear
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, W, H);
 
-    // Draw lane bands
     ctx.fillStyle = '#2a2a3e';
     for (let i = 0; i < 3; i++) {
       ctx.fillRect(i * 160, 0, 160, H);
     }
 
-    // Draw lane dividers
     ctx.strokeStyle = '#444';
     ctx.setLineDash([10, 8]);
     ctx.lineWidth = 2;
@@ -242,7 +234,6 @@ const renderer = {
     }
     ctx.setLineDash([]);
 
-    // Draw coins
     for (const coin of state.coins) {
       if (coin.collected) continue;
       ctx.fillStyle = '#f1c40f';
@@ -251,7 +242,6 @@ const renderer = {
       ctx.fill();
     }
 
-    // Draw obstacles
     for (const obs of state.obstacles) {
       ctx.fillStyle = '#e74c3c';
       roundRect(
@@ -264,7 +254,6 @@ const renderer = {
       ctx.fill();
     }
 
-    // Draw player
     const p = state.player;
     ctx.fillStyle = '#4a90d9';
     roundRect(
@@ -278,21 +267,24 @@ const renderer = {
   },
 };
 
-// ─── UI ──────────────────────────────────────────────────────────────────────
+// --- UI ----------------------------------------------------------------------
 const ui = {
   show(phase) {
-    const startScreen  = document.getElementById('start-screen');
+    const startScreen    = document.getElementById('start-screen');
     const gameoverScreen = document.getElementById('gameover-screen');
-    const hud = document.getElementById('hud');
+    const hud            = document.getElementById('hud');
+    const touchControls  = document.getElementById('touch-controls');
 
     startScreen.classList.add('hidden');
     gameoverScreen.classList.add('hidden');
     if (hud) hud.style.display = 'none';
+    if (touchControls) touchControls.classList.add('hidden');
 
     if (phase === 'idle') {
       startScreen.classList.remove('hidden');
     } else if (phase === 'playing') {
       if (hud) hud.style.display = '';
+      if (touchControls) touchControls.classList.remove('hidden');
     } else if (phase === 'gameover') {
       const finalScore = document.getElementById('final-score');
       if (finalScore) finalScore.textContent = '最終分數：' + state.score;
@@ -306,43 +298,34 @@ const ui = {
   },
 };
 
-// ─── Main Update ─────────────────────────────────────────────────────────────
+// --- Main Update -------------------------------------------------------------
 function update(dt) {
-  // Update time and speed
   state.time += dt / 1000;
   state.speed = Math.min(
     constants.MAX_SPEED,
     constants.BASE_SPEED + constants.SPEED_INCREMENT * Math.floor(state.time / constants.SPEED_STEP_INTERVAL)
   );
 
-  // Move player
   Player.update(dt);
 
-  // Move obstacles
   const moveAmount = state.speed * dt / 1000;
   for (const obs of state.obstacles) {
     obs.y += moveAmount;
   }
-  // Remove off-screen obstacles
   state.obstacles = state.obstacles.filter(obs => obs.y < constants.CANVAS_HEIGHT + obs.height);
 
-  // Move coins
   for (const coin of state.coins) {
     coin.y += moveAmount;
   }
-  // Remove collected or off-screen coins
   state.coins = state.coins.filter(
     coin => !coin.collected && coin.y < constants.CANVAS_HEIGHT + coin.radius
   );
 
-  // Spawn manager
   spawnManager.update(dt);
-
-  // Collision
   collision.check();
 }
 
-// ─── Game Loop ───────────────────────────────────────────────────────────────
+// --- Game Loop ---------------------------------------------------------------
 let lastTimestamp = null;
 
 function loop(timestamp) {
@@ -350,7 +333,6 @@ function loop(timestamp) {
   let dt = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
-  // Clamp deltaTime to 50ms
   if (dt > 50) dt = 50;
 
   if (state.phase === 'playing') {
@@ -361,14 +343,56 @@ function loop(timestamp) {
   requestAnimationFrame(loop);
 }
 
-// ─── Input ───────────────────────────────────────────────────────────────────
+// --- Keyboard Input ----------------------------------------------------------
 document.addEventListener('keydown', (e) => {
   if (state.phase === 'playing') {
     Player.handleInput(e.key);
   }
 });
 
-// ─── Button Events ───────────────────────────────────────────────────────────
+// --- Touch Swipe Input -------------------------------------------------------
+let touchStartX = null;
+const SWIPE_THRESHOLD = 30; // px
+
+canvas.addEventListener('touchstart', (e) => {
+  if (state.phase !== 'playing') return;
+  touchStartX = e.changedTouches[0].clientX;
+}, { passive: true });
+
+canvas.addEventListener('touchend', (e) => {
+  if (state.phase !== 'playing' || touchStartX === null) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) >= SWIPE_THRESHOLD) {
+    Player.handleInput(dx < 0 ? 'left' : 'right');
+  }
+  touchStartX = null;
+}, { passive: true });
+
+// --- Touch Button Input ------------------------------------------------------
+const btnLeft  = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+
+if (btnLeft) {
+  btnLeft.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state.phase === 'playing') Player.handleInput('left');
+  }, { passive: false });
+  btnLeft.addEventListener('click', () => {
+    if (state.phase === 'playing') Player.handleInput('left');
+  });
+}
+
+if (btnRight) {
+  btnRight.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state.phase === 'playing') Player.handleInput('right');
+  }, { passive: false });
+  btnRight.addEventListener('click', () => {
+    if (state.phase === 'playing') Player.handleInput('right');
+  });
+}
+
+// --- Button Events -----------------------------------------------------------
 document.getElementById('start-btn').addEventListener('click', () => {
   resetState();
   state.phase = 'playing';
@@ -383,6 +407,6 @@ document.getElementById('restart-btn').addEventListener('click', () => {
   ui.updateScore();
 });
 
-// ─── Init ────────────────────────────────────────────────────────────────────
+// --- Init --------------------------------------------------------------------
 ui.show('idle');
 requestAnimationFrame(loop);

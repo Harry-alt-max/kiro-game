@@ -39,6 +39,38 @@ canvas {
   pointer-events: none;
 }
 
+/* Touch controls */
+#touch-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  pointer-events: none;
+}
+
+#touch-controls button {
+  pointer-events: all;
+  width: 80px;
+  height: 80px;
+  font-size: 28px;
+  color: #fff;
+  background: rgba(74, 144, 217, 0.55);
+  border: 2px solid rgba(74, 144, 217, 0.8);
+  border-radius: 50%;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: background 0.15s;
+}
+
+#touch-controls button:active {
+  background: rgba(74, 144, 217, 0.9);
+}
+
 /* Overlay */
 .overlay {
   position: absolute;
